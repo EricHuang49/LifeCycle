@@ -1,5 +1,6 @@
-%clear;clc;
-%parpool(6)
+clear;clc;
+warning off
+parpool(2)
 %% Set up parameters
 bbeta               = 0.96;
 T                   = 10;
@@ -14,21 +15,10 @@ eepsilon.transition = [0.9727 0.0273 0.0000 0.0000 0.0000; ...
                        0.0000 0.0000 0.0000 0.0273 0.9727];
 r.values            = [0.04 0.05 0.06];
 r.transition        = [0.9 0.1 0; 0.05 0.9 0.05; 0 0.1 0.9];
-%%%%%%%%%%%%%%%%%%%%%%
-% Version 1: turn off uncertainty (r=0.05 and eepsilon = 0)
-% r.values = 0.05;
-% r.transition = 1;
-% eepsilon.values = 0;
-% eepsilon.transition = 1;
-%%%%%%%%%%%%%%%%%%%%%%
-na                  = 10;
-nh                  = 10;
+na                  = 250;  
+nh                  = 100;
 nr                  = length(r.values);
 neepsilon           = length(eepsilon.values);
-V                   = zeros(T,na,nh,nr,neepsilon);
-policy.a            = zeros(T-1,na,nh,nr,neepsilon);
-policy.h            = zeros(T-1,na,nh,nr,neepsilon);
-policy.l            = zeros(T,na,nh,nr,neepsilon);
 
 %% Create grid for endogenous state variables
 % a grid
@@ -41,12 +31,21 @@ hmin                = 0.6;
 hmax                = 7;
 hgrid               = linspace(hmin,hmax,nh);
 
+%% Initialize value and policy functions
+V                   = zeros(T,na,nh,nr,neepsilon);
+policy.a            = zeros(T-1,na,nh,nr,neepsilon);        % assets next period
+policy.h            = zeros(T-1,na,nh,nr,neepsilon);        % human capital next period
+policy.l            = zeros(T,na,nh,nr,neepsilon);          % labor supply
+policy.c            = zeros(T,na,nh,nr,neepsilon);          % consumption
+policy.e            = zeros(T,na,nh,nr,neepsilon);          % education
+
 %% Backward recursion
-tic;
 tempV = zeros(na*nh*nr*neepsilon,1);
 tempA = nan(na*nh*nr*neepsilon,1);
 tempH = nan(na*nh*nr*neepsilon,1);
 tempL = nan(na*nh*nr*neepsilon,1);
+tempC = nan(na*nh*nr*neepsilon,1);
+tempE = nan(na*nh*nr*neepsilon,1);
 
 % Period T
 for ih = 1 : nh
@@ -66,11 +65,29 @@ for ih = 1 : nh
         end
     end
     policy.l(T,:,ih,:,:) = w*hcurr;
+    policy.c(T,:,ih,:,:) = w*hcurr*policy.l(T,:,ih,:,:) + (1+rcurr)*acurr;
 end
 
+tic;
 % Periods T-1 to 1
 for age = T-1 : -1 : 1
-    for ind = 1 : (na*nh*nr*neepsilon)
+    
+    % First calculate the expected continuation value to speed up code
+    VnextExpected = zeros(na,nh,nr,neepsilon);                  % a and h are T+1 states; r and eepsilon are current 
+    Vnext = squeeze(V(age+1,:,:,:,:));
+    for ir = 1 : nr
+        for ieepsilon = 1 : neepsilon
+            Vp = reshape(Vnext,[],neepsilon);
+            Vp = Vp * eepsilon.transition(ieepsilon,:)';
+            %Vp = reshape(Vp,na,nh,nr);
+            Vp = reshape(Vp,[],nr);
+            Vp = Vp * r.transition(ir,:)';
+            VnextExpected(:,:,ir,ieepsilon) = reshape(Vp,na,nh);
+        end
+    end
+    
+    % Iterate over current states
+    parfor ind = 1 : (na*nh*nr*neepsilon)
         ia = floor(mod(ind-0.05,na))+1;
         ih = mod(floor((ind-0.05)/na),nh)+1;
         ir = mod(floor((ind-0.05)/(na*nh)),nr)+1;
@@ -83,12 +100,9 @@ for age = T-1 : -1 : 1
         eduShock = eepsilon.values(ieepsilon);
         
         VV = -1e5; 
-        %hChoice = nan; 
-        %aChoice = nan;
-        %transitionProb = kron(eepsilon.transition(ieepsilon,:),r.transition(ir,:)');
-        %transitionProb = reshape(transitionProb,1,neepsilon*nr);
+        hChoice = nan; aChoice = nan; lChoice = nan; cChoice = nan; eChoice = nan;
         
-        % Loop over states in the next period
+        % Iterate over states in the next period
         for ihp = 1 : nh
             education = ((hgrid(ihp)-rrho*humanCapital)/exp(eduShock))^(1/ggamma);
             labor = w*humanCapital-education;
@@ -103,46 +117,30 @@ for age = T-1 : -1 : 1
             
             for iap = 1 : na                                               
                 consumption = totalIncome - agrid(iap);
-                % Restriction on consumption
+                
+                % If consumption turns negative, stop searching on asset
                 if consumption < 0
-                    continue
-                end
-                %Vnext = reshape(V(age+1,iap,ihp,:,:),nr*neepsilon,1);                
-
-                const = consumption - (education+labor)^2/2;                
-                
-                if const <= 0 
-                    utility = -1e5;
-                else
-                    %VnextExpected = transitionProb.*squeeze(V(age+1,iap,ihp,:,:));
-                    VnextExpected = 0;
-                    for irp = 1 : nr
-                        for ieepsilonp = 1 : neepsilon
-                            VnextExpected = VnextExpected + ...
-                                eepsilon.transition(ieepsilon,ieepsilonp) ...
-                                *r.transition(ir,irp)*V(age+1,iap,ihp,irp,ieepsilonp);
-                        end
-                    end
-                    
-                    %utility = log(const) + bbeta*sum(VnextExpected(:));
-                    utility = log(const) + bbeta*VnextExpected;
-                end
-                
-                % Use concavity of the value function to speed up
-                if utility < utilityPrevA
                     break
-                else 
-                    utilityPrevA = utility;
                 end
+
+                const = consumption - (education+labor)^2/2;     
                 
+                % If the term inside log utility <= 0, stop searching on asset
+                if const <= 0 
+                    break
+                else
+                    utility = log(const) + bbeta*VnextExpected(iap,ihp,ir,ieepsilon);
+                end
+               
+                % Update value function if we find a bigger value
                 if utility >= VV
                     VV = utility;
                     hChoice = ihp;
                     aChoice = iap;      
                     lChoice = labor;
+                    cChoice = consumption;
+                    eChoice = education;
                 end
-                %utility = 0;
-                
             end
         end
         
@@ -150,8 +148,11 @@ for age = T-1 : -1 : 1
         tempA(ind) = aChoice;
         tempH(ind) = hChoice;
         tempL(ind) = lChoice;
+        tempC(ind) = cChoice;
+        tempE(ind) = eChoice;
     end
     
+    % Fill into the policy functions
     for ind = 1 : (na*nh*nr*neepsilon)
         ia = floor(mod(ind-0.05,na))+1;
         ih = mod(floor((ind-0.05)/na),nh)+1;
@@ -162,6 +163,8 @@ for age = T-1 : -1 : 1
         policy.a(age,ia,ih,ir,ieepsilon) = tempA(ind);
         policy.h(age,ia,ih,ir,ieepsilon) = tempH(ind);
         policy.l(age,ia,ih,ir,ieepsilon) = tempL(ind);
+        policy.e(age,ia,ih,ir,ieepsilon) = tempE(ind);
+        policy.c(age,ia,ih,ir,ieepsilon) = tempC(ind);
     end
     
     finish = toc;
@@ -169,33 +172,65 @@ for age = T-1 : -1 : 1
 end
 
 %% Simulate paths from policy functions
-savings         = zeros(T,75);
-asset           = zeros(T,75);
-consumption     = zeros(T,75);
-labor           = zeros(T,75);
-education       = zeros(T,75);
-humanCapital    = ones(T,75);
+% Initialize the paths
+path.savings         = zeros(T,15);
+path.asset           = zeros(T,15);
+path.consumption     = zeros(T,15);
+path.labor           = zeros(T,15);
+path.education       = zeros(T,15);
+path.humanCapital    = ones(T,15);
 
+% Generate Markov Chains for interest rate and human capital shock
 rng(1);
-markov.interestRate = simulate(dtmc(r.transition),T-1,'X0',25*ones(1,nr));
-markov.eduShock     = simulate(dtmc(eepsilon.transition),T-1,'X0',15*ones(1,neepsilon));
+markov.eduShock     = simulate(dtmc(eepsilon.transition),T-1,'X0',3*ones(1,neepsilon));
+markov.interestRate = [];
+for amountsimulation = 1: (15/3)
+    markov.interestRate = horzcat(markov.interestRate,  ...
+        simulate(dtmc(r.transition),T-1, 'X0', [1 1 1]));
+end
 
+% Generate the paths using policy functions
 for j = 1 : size(markov.eduShock,2)
     for age = 1 : T
-        [~,ia] = min(abs(agrid-asset(age,j)));
-        [~,ih] = min(abs(hgrid-humanCapital(age,j)));
+        [~,ia] = min(abs(agrid-path.asset(age,j)));
+        [~,ih] = min(abs(hgrid-path.humanCapital(age,j)));
         ir = markov.interestRate(age,j);
         ieepsilon = markov.eduShock(age,j);
         
-        labor(age,j) = policy.l(age,ia,ih,ir,ieepsilon);
-        education(age,j) = w*humanCapital(age,j) - labor(age,j);
+        path.labor(age,j) = policy.l(age,ia,ih,ir,ieepsilon);
+        path.education(age,j) = w*path.humanCapital(age,j) - path.labor(age,j);
+        path.education(age,j) = policy.e(age,ia,ih,ir,ieepsilon);
+        
         if age < T
-            savings(age,j) = agrid(policy.a(age,ia,ih,ir,ieepsilon)) - asset(age,j);
-            asset(age+1,j) = agrid(policy.a(age,ia,ih,ir,ieepsilon));
-            humanCapital(age+1,j) = hgrid(policy.h(age,ia,ih,ir,ieepsilon));
-            consumption(age,j) = w*humanCapital(age,j)*labor(age,j) + (1+r.values(ir))*asset(age,j) - asset(age+1,j);
+            path.savings(age,j) = agrid(policy.a(age,ia,ih,ir,ieepsilon)) - path.asset(age,j);
+            path.asset(age+1,j) = agrid(policy.a(age,ia,ih,ir,ieepsilon));
+            path.humanCapital(age+1,j) = hgrid(policy.h(age,ia,ih,ir,ieepsilon));
+            path.consumption(age,j) = policy.c(age,ia,ih,ir,ieepsilon);          
+        else
+            path.savings(T,j) = 0;
+            path.consumption(T,j) = w*path.humanCapital(age,j)*path.labor(age,j) + ...
+                (1+r.values(ir))*path.asset(age,j);
         end
+        
     end
-    savings(T,j) = 0;
-    consumption(T,j) = w*humanCapital(age,j)*labor(age,j) + (1+r.values(ir))*asset(age,j);
 end
+
+% Plot the simulated paths
+subplot(2,3,1)
+plot(1:T,path.savings)
+title('Savings')
+subplot(2,3,2)
+plot(1:T,path.asset)
+title('Asset')
+subplot(2,3,3)
+plot(1:T,path.consumption)
+title('Consumption')
+subplot(2,3,4)
+plot(1:T,path.labor)
+title('Labor')
+subplot(2,3,5)
+plot(1:T,path.education)
+title('Education')
+subplot(2,3,6)
+plot(1:T,path.humanCapital)
+title('Human Capital')

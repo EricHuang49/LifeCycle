@@ -85,6 +85,10 @@
 Econ 714 Homework I
 \end_layout
 
+\begin_layout Author
+Jincheng(Eric) Huang
+\end_layout
+
 \begin_layout Standard
 A household has preferences:
 \begin_inset Formula 
@@ -134,7 +138,7 @@ c_{t}+a_{t+1}=w_{t}h_{t}l_{t}+(1+r_{t})a_{t}
 where human capital accumulates according to the law of motion:
 \begin_inset Formula 
 \[
-h_{t+1}=0.9h_{t}+e_{t}^{0.7+\epsilon_{t}}
+h_{t+1}=0.9h_{t}+\exp(\epsilon_{t})e_{t}^{0.7}
 \]
 
 \end_inset
@@ -267,7 +271,7 @@ Given asset position
 \begin{align*}
 V(t,a,h,r,\epsilon) & =\max_{c,a',l,e}\log\Bigg(c-\frac{(e+l)^{2}}{2}\Bigg)+0.96\sum_{\epsilon'|\epsilon}\sum_{r'|r}\Pi_{\epsilon,\epsilon'}\Gamma_{r,r'}V(t+1,a',h',r',\epsilon')\\
 \text{s.t. }c+a' & =whl+(1+r)a\\
-h' & =0.9h+e^{0.7+\epsilon}\\
+h' & =0.9h+exp(\epsilon)e^{0.7}\\
 \text{and }V(T,a,h,r,\epsilon) & =\max_{c,l}\log\Bigg(c-\frac{l^{2}}{2}\Bigg)\\
 \text{s.t. }c & =whl+(1+r)a
 \end{align*}
@@ -358,46 +362,307 @@ Let
 \end_inset
 
  inside the log utility.
- Taking the FOCs we get
+ Taking the FOC with respect to 
+\begin_inset Formula $l$
+\end_inset
+
+ we get
 \begin_inset Formula 
 \begin{align}
-[a'] & \frac{1}{Z}=0.96\sum_{\epsilon'|\epsilon}\sum_{r'|r}\Pi_{\epsilon,\epsilon'}\Gamma_{r,r'}V_{a'}(t+1,a',0.9h+\epsilon e^{0.7},r',\epsilon')\label{eq:FOCa}\\{}
-[l] & \frac{wh-(e+l)}{Z}=0\label{eq:FOCl}\\{}
-[e] & \frac{e+l}{Z}=0.96\times0.7\epsilon e^{-0.3}\sum_{\epsilon'|\epsilon}\sum_{r'|r}\Pi_{\epsilon,\epsilon'}\Gamma_{r,r'}V_{h'}(t+1,a',0.9h+\epsilon e^{0.7},r',\epsilon')\label{eq:FOCe}
+[l]\, & \frac{wh-(e+l)}{Z}=0\label{eq:FOCl}
 \end{align}
 
 \end_inset
 
+from which we get 
+\begin_inset Formula $l=wh-e$
+\end_inset
 
+.
+ We will use this optimality condition in the value function iteration later.
 \end_layout
 
 \begin_layout Standard
-The Envelope conditions are
-\begin_inset Formula 
-\begin{align}
-V_{a}(t,a,h,r,\epsilon) & =\frac{(1+r)}{Z}\label{eq:envelopea}\\
-V_{h}(t,a,h,r,\epsilon) & =\frac{wl}{Z}\label{eq:envelopeh}
-\end{align}
+The following pseudo-code summarizes the calculation of the value and policy
+ functions using backward-induction:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float algorithm
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+\begin_inset Argument 1
+status open
+
+\begin_layout Plain Layout
+Backward induction:
+\end_layout
 
 \end_inset
 
 
-\end_layout
+\begin_inset Newline newline
+\end_inset
 
-\begin_layout Standard
-From these equations we can get the intertemporal Euler Equations
+
+\series bold
+Data:
+\series default
+
+\begin_inset Newline newline
+\end_inset
+
+Grid for assets 
+\begin_inset Formula $A=\{a_{1},...,a_{n_{a}}\}$
+\end_inset
+
+.
+\begin_inset Newline newline
+\end_inset
+
+Grid for interest rates 
+\begin_inset Formula $R=\{r_{1},...,r_{n_{r}}\}.$
+\end_inset
+
+
+\begin_inset Newline newline
+\end_inset
+
+Grid for human capital shocks 
+\begin_inset Formula $E=\{\epsilon_{1},...,\epsilon_{n_{\epsilon}}\}.$
+\end_inset
+
+
+\begin_inset Newline newline
+\end_inset
+
+Transition matrices 
+\begin_inset Formula $\Pi(\epsilon'|\epsilon)$
+\end_inset
+
+ and 
+\begin_inset Formula $\Gamma(r'|r)$
+\end_inset
+
+.
+\begin_inset Newline newline
+\end_inset
+
+
+\series bold
+Result:
+\series default
+
+\begin_inset Newline newline
+\end_inset
+
+Value function 
+\begin_inset Formula $V(t,a_{i},h_{j},r_{k},\epsilon_{l})$
+\end_inset
+
+ for 
+\begin_inset Formula $t=1,...,T,\,i=1,...,n_{a},\,j=1,...,n_{h},\,k=1,...,n_{r},\,l=1,...,n_{\epsilon}.$
+\end_inset
+
+
+\begin_inset Newline newline
+\end_inset
+
+
+\series bold
+for
+\series default
+ 
+\begin_inset Formula $\forall a_{i},h_{j},r_{k}$
+\end_inset
+
+ and 
+\begin_inset Formula $\epsilon_{l}$
+\end_inset
+
+ 
+\series bold
+do
+\begin_inset Newline newline
+\end_inset
+
+
 \begin_inset Formula 
 \[
-\frac{1}{Z}=0.96
+V(T,a_{i},h_{j},r_{k},\epsilon_{l})=u((1+r_{k})a_{i}+\frac{1}{2}w^{2}h_{j}^{2})
 \]
 
 \end_inset
 
 
+\begin_inset Newline newline
+\end_inset
+
+end
+\begin_inset Newline newline
+\end_inset
+
+for 
+\begin_inset Formula $t=T-1,...,1$
+\end_inset
+
+ do
+\begin_inset Newline newline
+\end_inset
+
+
+\begin_inset Formula $\text{ Use }V(t+1,a_{i},h_{j},r_{k},\epsilon_{l})\text{ to solve:}$
+\end_inset
+
+
+\begin_inset Formula 
+\begin{align*}
+V(t,a_{i},h_{j},r_{k},\epsilon_{l}) & =\max_{a',h',e,l}u(c-\frac{(e+l)^{2}}{2})+0.96\sum_{\epsilon'|\epsilon}\sum_{r'|r}\Pi_{\epsilon,\epsilon'}\Gamma_{r,r'}V(t+1,a',h',r',\epsilon')\\
+\text{s.t. }c+a' & =wh_{j}l+(1+r_{k})\\
+h' & =0.9h_{j}+exp(\epsilon_{l})e^{0.7}
+\end{align*}
+
+\end_inset
+
+
+\begin_inset Newline newline
+\end_inset
+
+end
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+We use the initial conditions 
+\begin_inset Formula $a_{1}=0$
+\end_inset
+
+ and 
+\begin_inset Formula $h_{1}=1$
+\end_inset
+
+ and simulate paths of interest rates 
+\begin_inset Formula $\{r_{t}\}_{t=1}^{T}$
+\end_inset
+
+ and human capital shocks 
+\begin_inset Formula $\{\epsilon_{t}\}_{t=1}^{T}$
+\end_inset
+
+ using the provided Markov transition probabilities.
+ We simulate 15 paths where each path have a different combination of the
+ initial values 
+\begin_inset Formula $r_{1},\epsilon_{1}$
+\end_inset
+
+.
+ We then iteratively plug the values of the state variables into the policy
+ functions to get the realized paths of each variable.
+ The realized paths are shown below:
+\end_layout
+
+\begin_layout Standard
+\noindent
+\align center
+\begin_inset Graphics
+	filename policy.png
+	scale 70
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+As the household starts with a low value of human capital and 0 asset, labor
+ and capital income is low at the beginning, making the household constrained.
+ Therefore the household tends to borrow in the first few periods and invest
+ in human capital through education.
+ In this exercise we assume that the household cannot borrow, i.e.
+ the lower bound for 
+\begin_inset Formula $a$
+\end_inset
+
+ is 0, so the household asset and savings hit the constraint 0 for a substantial
+ amount of time.
+ Later on in life, as human capital becomes higher, the household is able
+ to enjoy higher labor income and is thus less constrained, thereby consuming
+ more and investing less in human capital (wealth effect).
+ In the last period, since there is no continuation value, the household
+ will not spend any time on education and will not save for future consumption.
+\end_layout
+
+\begin_layout Standard
+The highest 3 paths for human capital and consumption correspond to the
+ paths where shocks on human capital are the highest.
+ This implies that as the return from education are high, the household
+ tend to spend more time on education, increasing the human capital level
+ and enabling a higher level of consumption later in the lifetime.
 \end_layout
 
 \begin_layout Section
 Parallelization (4 points)
+\end_layout
+
+\begin_layout Standard
+To speed up the code we use parallel for loop in Matlab.
+ Since parallel for loop requires that the calculations done inside the
+ loop must be mutually independent, we first assign an overall index for
+ the combination of all state variables, and decompose the index into subindices
+ for each state variable (
+\begin_inset Formula $a,h,r,\epsilon$
+\end_inset
+
+) inside the loop, so that maximization is done indepdently for each state.
+ 
+\end_layout
+
+\begin_layout Standard
+Additionally, to economize the search for the next period assets, we skip
+ the values that we know are going to give us unreasonable values for the
+ endogenous state variables.
+ Concretely, we skip the human capital level in the iteration if education
+ and labor are negative, and stop searching on the asset grid if consumption
+ or the term inside log utility become negative (as higher asset for the
+ next period, i.e.
+ higher saving for the current period will make these terms more negative).
+\end_layout
+
+\begin_layout Section
+Appendix
+\end_layout
+
+\begin_layout Standard
+The Matlab code for the life cycle computation is posted below:
+\end_layout
+
+\begin_layout Standard
+\noindent
+\align center
+\begin_inset External
+	template PDFPages
+	filename C:/Users/Eric/Desktop/HW1.pdf
+	lyxscale 50
+	extra LaTeX "pages=-"
+
+\end_inset
+
+
 \end_layout
 
 \end_body
